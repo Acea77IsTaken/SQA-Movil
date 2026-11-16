@@ -9,15 +9,35 @@ class InventoryValidationException implements Exception {
   String toString() => message;
 }
 
+class DashboardSummary {
+  final int totalProducts;
+  final int totalUnits;
+  final int lowStockCount;
+  final int outOfStockCount;
+  final List<Product> alerts;
+  final List<InventoryMovement> recentMovements;
+
+  const DashboardSummary({
+    required this.totalProducts,
+    required this.totalUnits,
+    required this.lowStockCount,
+    required this.outOfStockCount,
+    required this.alerts,
+    required this.recentMovements,
+  });
+}
+
 class InventoryRepository {
   final List<Product> _products = [];
   final List<InventoryMovement> _movements = [];
 
   static const List<String> availableCategories = [
     'Abarrotes',
-    'Lácteos',
     'Bebidas',
+    'Snacks',
     'Limpieza',
+    'Higiene personal',
+    'Lácteos',
     'Carnicería',
     'Panadería',
   ];
@@ -95,19 +115,49 @@ class InventoryRepository {
   }
 
   List<InventoryMovement> getAllMovements() {
-    // Ordenar del más reciente al más antiguo
     final sorted = List<InventoryMovement>.from(_movements);
     sorted.sort((a, b) => b.date.compareTo(a.date));
     return sorted;
   }
 
+  DashboardSummary getDashboardSummary() {
+    final active = getAllActiveProducts();
+    final totalUnits = active.fold<int>(0, (sum, p) => sum + p.stock);
+    final lowStock = getLowOrOutOfStockProducts()
+      ..sort((a, b) {
+        final cmp = a.stock.compareTo(b.stock);
+        return cmp != 0 ? cmp : a.name.compareTo(b.name);
+      });
+    final outOfStockCount = active.where((p) => p.stock == 0).length;
+    final recent = getAllMovements().take(5).toList();
+
+    return DashboardSummary(
+      totalProducts: active.length,
+      totalUnits: totalUnits,
+      lowStockCount: lowStock.length,
+      outOfStockCount: outOfStockCount,
+      alerts: lowStock.take(4).toList(),
+      recentMovements: recent,
+    );
+  }
+
   List<Product> searchProducts(String query) {
+    return filterProducts(query: query, status: 'active');
+  }
+
+  List<Product> filterProducts({
+    String query = '',
+    String? category,
+    String status = 'active',
+  }) {
     final cleanQuery = query.trim().toLowerCase();
-    if (cleanQuery.isEmpty) {
-      return getAllActiveProducts();
-    }
     return _products.where((p) {
-      if (!p.isActive) return false;
+      if (status == 'active' && !p.isActive) return false;
+      if (status == 'inactive' && p.isActive) return false;
+      if (category != null && category.isNotEmpty && p.category != category) {
+        return false;
+      }
+      if (cleanQuery.isEmpty) return true;
       final nameMatches = p.name.toLowerCase().contains(cleanQuery);
       final skuMatches = p.sku.toLowerCase().contains(cleanQuery);
       return nameMatches || skuMatches;
@@ -131,7 +181,6 @@ class InventoryRepository {
     }
   }
 
-  /// Registro atómico de productos con validaciones y trazabilidad de stock inicial
   Product registerProduct({
     required String name,
     required String rawSku,
@@ -144,7 +193,9 @@ class InventoryRepository {
   }) {
     final cleanName = name.trim();
     if (cleanName.isEmpty) {
-      throw const InventoryValidationException('El nombre del producto no puede estar vacío');
+      throw const InventoryValidationException(
+        'El nombre del producto no puede estar vacío',
+      );
     }
 
     final normalizedSku = rawSku.trim().toUpperCase();
@@ -153,32 +204,43 @@ class InventoryRepository {
     }
 
     if (findBySku(normalizedSku) != null) {
-      throw InventoryValidationException('El SKU "$normalizedSku" ya se encuentra registrado');
+      throw InventoryValidationException(
+        'El SKU "$normalizedSku" ya se encuentra registrado',
+      );
     }
 
     if (!availableCategories.contains(category)) {
-      throw InventoryValidationException('La categoría "$category" no es válida');
+      throw InventoryValidationException(
+        'La categoría "$category" no es válida',
+      );
     }
 
     if (price < 0) {
-      throw const InventoryValidationException('El precio no puede ser negativo');
+      throw const InventoryValidationException(
+        'El precio no puede ser negativo',
+      );
     }
 
-    // Comprobar máximo dos decimales
     final priceStr = price.toString();
     if (priceStr.contains('.')) {
       final decimals = priceStr.split('.')[1];
       if (decimals.length > 2) {
-        throw const InventoryValidationException('El precio solo puede tener hasta dos decimales');
+        throw const InventoryValidationException(
+          'El precio solo puede tener hasta dos decimales',
+        );
       }
     }
 
     if (initialStock < 0) {
-      throw const InventoryValidationException('El stock inicial no puede ser negativo');
+      throw const InventoryValidationException(
+        'El stock inicial no puede ser negativo',
+      );
     }
 
     if (minStock < 0) {
-      throw const InventoryValidationException('El stock mínimo no puede ser negativo');
+      throw const InventoryValidationException(
+        'El stock mínimo no puede ser negativo',
+      );
     }
 
     final newId = (DateTime.now().millisecondsSinceEpoch).toString();
@@ -190,11 +252,12 @@ class InventoryRepository {
       price: price,
       stock: initialStock,
       minStock: minStock,
-      description: description?.trim().isEmpty == true ? null : description?.trim(),
+      description: description?.trim().isEmpty == true
+          ? null
+          : description?.trim(),
       isActive: true,
     );
 
-    // Operación atómica: agregar producto y si stock inicial > 0, crear movimiento de entrada inicial
     _products.add(newProduct);
 
     if (initialStock > 0) {
@@ -216,7 +279,83 @@ class InventoryRepository {
     return newProduct;
   }
 
-  /// Registro atómico de movimientos de entrada y salida
+  /// Edición de datos de un producto existente (como en ProductController::update de la web)
+  Product editProduct({
+    required String id,
+    required String name,
+    required String rawSku,
+    required String category,
+    required double price,
+    required int minStock,
+    String? description,
+  }) {
+    final existing = findById(id);
+    if (existing == null) {
+      throw const InventoryValidationException('Producto no encontrado');
+    }
+
+    final cleanName = name.trim();
+    if (cleanName.isEmpty) {
+      throw const InventoryValidationException(
+        'El nombre del producto no puede estar vacío',
+      );
+    }
+
+    final normalizedSku = rawSku.trim().toUpperCase();
+    if (normalizedSku.isEmpty) {
+      throw const InventoryValidationException('El SKU es obligatorio');
+    }
+
+    final duplicate = findBySku(normalizedSku);
+    if (duplicate != null && duplicate.id != id) {
+      throw InventoryValidationException(
+        'El SKU "$normalizedSku" ya se encuentra registrado',
+      );
+    }
+
+    if (!availableCategories.contains(category)) {
+      throw InventoryValidationException(
+        'La categoría "$category" no es válida',
+      );
+    }
+
+    if (price < 0) {
+      throw const InventoryValidationException(
+        'El precio no puede ser negativo',
+      );
+    }
+
+    if (minStock < 0) {
+      throw const InventoryValidationException(
+        'El stock mínimo no puede ser negativo',
+      );
+    }
+
+    final updated = existing.copyWith(
+      name: cleanName,
+      sku: normalizedSku,
+      category: category,
+      price: price,
+      minStock: minStock,
+      description: description?.trim().isEmpty == true
+          ? null
+          : description?.trim(),
+    );
+    updateProduct(updated);
+    return updated;
+  }
+
+  /// Desactivar un producto conservando su historial (como en ProductController::deactivate de la web)
+  Product deactivateProduct(String id) {
+    final existing = findById(id);
+    if (existing == null) {
+      throw const InventoryValidationException('Producto no encontrado');
+    }
+    final deactivated = existing.copyWith(isActive: false);
+    updateProduct(deactivated);
+    return deactivated;
+  }
+
   InventoryMovement registerMovement({
     required String productId,
     required MovementType type,
@@ -230,11 +369,15 @@ class InventoryRepository {
     }
 
     if (!product.isActive) {
-      throw const InventoryValidationException('No se pueden realizar movimientos en productos inactivos');
+      throw const InventoryValidationException(
+        'No se pueden realizar movimientos en productos inactivos',
+      );
     }
 
     if (quantity <= 0) {
-      throw const InventoryValidationException('La cantidad debe ser un entero positivo mayor a cero');
+      throw const InventoryValidationException(
+        'La cantidad debe ser un entero positivo mayor a cero',
+      );
     }
 
     final currentStock = product.stock;
@@ -251,11 +394,9 @@ class InventoryRepository {
       newStock = currentStock - quantity;
     }
 
-    // Actualizar producto
     final updatedProduct = product.copyWith(stock: newStock);
     updateProduct(updatedProduct);
 
-    // Registrar movimiento
     final movement = InventoryMovement(
       id: 'mov-${DateTime.now().microsecondsSinceEpoch}',
       productId: product.id,
@@ -266,11 +407,65 @@ class InventoryRepository {
       newStock: newStock,
       responsible: responsible,
       date: DateTime.now(),
-      observation: observation?.trim().isEmpty == true ? null : observation?.trim(),
+      observation: observation?.trim().isEmpty == true
+          ? null
+          : observation?.trim(),
     );
     _movements.add(movement);
 
     return movement;
+  }
+
+  /// Aplica los datos recibidos desde el endpoint /api/sync del servidor web Laravel
+  void applyRemoteSyncData(Map<String, dynamic> payload) {
+    final rawProducts = payload['products'];
+    if (rawProducts is List) {
+      _products
+        ..clear()
+        ..addAll(
+          rawProducts.whereType<Map<String, dynamic>>().map((json) {
+            return Product(
+              id: json['id'].toString(),
+              name: (json['name'] ?? '').toString(),
+              sku: (json['sku'] ?? '').toString(),
+              category: (json['category'] ?? 'Abarrotes').toString(),
+              price: (json['price'] as num?)?.toDouble() ?? 0.0,
+              stock: (json['stock'] as num?)?.toInt() ?? 0,
+              minStock: (json['minimum_stock'] as num?)?.toInt() ?? 0,
+              description: json['description']?.toString(),
+              isActive: json['is_active'] == true,
+            );
+          }),
+        );
+    }
+
+    final rawMovements = payload['movements'];
+    if (rawMovements is List) {
+      _movements
+        ..clear()
+        ..addAll(
+          rawMovements.whereType<Map<String, dynamic>>().map((json) {
+            final typeStr = (json['type'] ?? 'entrada').toString();
+            final parsedDate =
+                DateTime.tryParse((json['created_at'] ?? '').toString()) ??
+                DateTime.now();
+            return InventoryMovement(
+              id: json['id'].toString(),
+              productId: json['product_id'].toString(),
+              productName: (json['product_name'] ?? 'Producto').toString(),
+              type: typeStr == 'salida'
+                  ? MovementType.salida
+                  : MovementType.entrada,
+              quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+              previousStock: (json['previous_stock'] as num?)?.toInt() ?? 0,
+              newStock: (json['resulting_stock'] as num?)?.toInt() ?? 0,
+              responsible: (json['responsible'] ?? 'Administrador').toString(),
+              date: parsedDate,
+              observation: json['note']?.toString(),
+            );
+          }),
+        );
+    }
   }
 
   void addProduct(Product product) {
