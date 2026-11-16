@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../services/inventory_repository.dart';
+import 'register_product_screen.dart';
 
 class ProductListScreen extends StatefulWidget {
   final InventoryRepository repository;
@@ -29,6 +30,17 @@ class _ProductListScreenState extends State<ProductListScreen> {
     setState(() {
       _searchQuery = '';
     });
+  }
+
+  Future<void> _navigateToRegister() async {
+    final result = await Navigator.of(context).push<Product>(
+      MaterialPageRoute(
+        builder: (_) => RegisterProductScreen(repository: widget.repository),
+      ),
+    );
+    if (result != null) {
+      setState(() {});
+    }
   }
 
   Color _getStatusColor(StockStatus status) {
@@ -61,27 +73,40 @@ class _ProductListScreenState extends State<ProductListScreen> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: TextField(
-            key: const Key('product_search_field'),
-            controller: _searchController,
-            onChanged: (val) {
-              setState(() {
-                _searchQuery = val;
-              });
-            },
-            decoration: InputDecoration(
-              hintText: 'Buscar por nombre o SKU...',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _searchQuery.isNotEmpty
-                  ? IconButton(
-                      key: const Key('clear_search_button'),
-                      icon: const Icon(Icons.clear),
-                      onPressed: _clearSearch,
-                    )
-                  : null,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-            ),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  key: const Key('product_search_field'),
+                  controller: _searchController,
+                  onChanged: (val) {
+                    setState(() {
+                      _searchQuery = val;
+                    });
+                  },
+                  decoration: InputDecoration(
+                    hintText: 'Buscar por nombre o SKU...',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            key: const Key('clear_search_button'),
+                            icon: const Icon(Icons.clear),
+                            onPressed: _clearSearch,
+                          )
+                        : null,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton.filled(
+                key: const Key('open_register_product_button'),
+                icon: const Icon(Icons.add),
+                tooltip: 'Registrar producto',
+                onPressed: _navigateToRegister,
+              ),
+            ],
           ),
         ),
         Expanded(
