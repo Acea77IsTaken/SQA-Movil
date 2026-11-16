@@ -1,14 +1,22 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'screens/dashboard_screen.dart';
+import 'screens/login_screen.dart';
 import 'screens/low_stock_screen.dart';
 import 'screens/movement_history_screen.dart';
 import 'screens/product_list_screen.dart';
+import 'services/auth_service.dart';
 import 'services/inventory_repository.dart';
 
 class StockFacilApp extends StatelessWidget {
   final InventoryRepository? repository;
+  final AuthService? authService;
 
-  const StockFacilApp({super.key, this.repository});
+  const StockFacilApp({
+    super.key,
+    this.repository,
+    this.authService,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -23,15 +31,23 @@ class StockFacilApp extends StatelessWidget {
           border: OutlineInputBorder(),
         ),
       ),
-      home: InventoryHome(repository: repository),
+      home: InventoryHome(
+        repository: repository,
+        authService: authService,
+      ),
     );
   }
 }
 
 class InventoryHome extends StatefulWidget {
   final InventoryRepository? repository;
+  final AuthService? authService;
 
-  const InventoryHome({super.key, this.repository});
+  const InventoryHome({
+    super.key,
+    this.repository,
+    this.authService,
+  });
 
   @override
   State<InventoryHome> createState() => InventoryHomeState();
@@ -39,6 +55,7 @@ class InventoryHome extends StatefulWidget {
 
 class InventoryHomeState extends State<InventoryHome> {
   late final InventoryRepository repository;
+  late final AuthService authService;
   int _selected = 0;
   bool _isLoading = false;
   Timer? _pendingLoadTimer;
@@ -48,6 +65,7 @@ class InventoryHomeState extends State<InventoryHome> {
   void initState() {
     super.initState();
     repository = widget.repository ?? InventoryRepository();
+    authService = widget.authService ?? AuthService();
   }
 
   @override
@@ -71,6 +89,31 @@ class InventoryHomeState extends State<InventoryHome> {
       if (!mounted) return;
       setState(() => _isLoading = false);
     });
+  }
+
+  Future<void> _openDashboard() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => DashboardScreen(repository: repository),
+      ),
+    );
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _openAuth() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (ctx) => LoginScreen(
+          authService: authService,
+          onLoginSuccess: () => Navigator.of(ctx).pop(),
+        ),
+      ),
+    );
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Widget _buildBody() {
@@ -121,6 +164,24 @@ class InventoryHomeState extends State<InventoryHome> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               ),
+            IconButton(
+              key: const Key('open_dashboard_button'),
+              tooltip: 'Panel Principal (Dashboard)',
+              icon: const Icon(Icons.dashboard_outlined),
+              onPressed: _openDashboard,
+            ),
+            IconButton(
+              key: const Key('open_auth_button'),
+              tooltip: authService.isLoggedIn
+                  ? 'Cuenta (${authService.currentUserName})'
+                  : 'Iniciar sesión / Registro',
+              icon: Icon(
+                authService.isLoggedIn
+                    ? Icons.verified_user_outlined
+                    : Icons.person_outline,
+              ),
+              onPressed: _openAuth,
+            ),
           ],
         ),
         body: SafeArea(
