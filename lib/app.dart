@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'screens/product_list_screen.dart';
+import 'services/inventory_repository.dart';
 
 class StockFacilApp extends StatelessWidget {
-  const StockFacilApp({super.key});
+  final InventoryRepository? repository;
+
+  const StockFacilApp({super.key, this.repository});
 
   @override
   Widget build(BuildContext context) {
@@ -16,46 +20,69 @@ class StockFacilApp extends StatelessWidget {
           border: OutlineInputBorder(),
         ),
       ),
-      home: const InventoryHome(),
+      home: InventoryHome(repository: repository),
     );
   }
 }
 
 class InventoryHome extends StatefulWidget {
-  const InventoryHome({super.key});
+  final InventoryRepository? repository;
+
+  const InventoryHome({super.key, this.repository});
 
   @override
   State<InventoryHome> createState() => _InventoryHomeState();
 }
 
 class _InventoryHomeState extends State<InventoryHome> {
+  late final InventoryRepository repository;
   int _selected = 0;
   static const _titles = ['Productos', 'Stock bajo', 'Historial'];
+
+  @override
+  void initState() {
+    super.initState();
+    repository = widget.repository ?? InventoryRepository();
+  }
+
+  Widget _buildBody() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+          child: Text(
+            _titles[_selected],
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+        ),
+        Expanded(
+          child: _selected == 0
+              ? ProductListScreen(repository: repository)
+              : const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(height: 16),
+                      Text('Tu inventario en este dispositivo.'),
+                      SizedBox(height: 8),
+                      Text(
+                        'La base Flutter está lista. Las funciones del inventario se incorporan en sus respectivas ramas.',
+                      ),
+                    ],
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('StockFácil')),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _titles[_selected],
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
-              const SizedBox(height: 16),
-              const Text('Tu inventario en este dispositivo.'),
-              const SizedBox(height: 8),
-              const Text(
-                'La base Flutter está lista. Las funciones del inventario se incorporan en sus respectivas ramas.',
-              ),
-            ],
-          ),
-        ),
-      ),
+      body: SafeArea(child: _buildBody()),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selected,
         onDestinationSelected: (value) => setState(() => _selected = value),
