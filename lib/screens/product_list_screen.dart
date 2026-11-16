@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../services/inventory_repository.dart';
+import 'register_movement_screen.dart';
 import 'register_product_screen.dart';
 
 class ProductListScreen extends StatefulWidget {
@@ -36,6 +37,20 @@ class _ProductListScreenState extends State<ProductListScreen> {
     final result = await Navigator.of(context).push<Product>(
       MaterialPageRoute(
         builder: (_) => RegisterProductScreen(repository: widget.repository),
+      ),
+    );
+    if (result != null) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _navigateToMovement([Product? product]) async {
+    final result = await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RegisterMovementScreen(
+          repository: widget.repository,
+          initialProductId: product?.id,
+        ),
       ),
     );
     if (result != null) {
@@ -261,6 +276,12 @@ class _ProductListScreenState extends State<ProductListScreen> {
                                   fontSize: 14,
                                   color: Colors.grey.shade800,
                                 ),
+                              ),
+                              IconButton(
+                                key: Key('move_product_btn_${product.id}'),
+                                icon: const Icon(Icons.swap_horiz, size: 20),
+                                tooltip: 'Registrar movimiento',
+                                onPressed: () => _navigateToMovement(product),
                               ),
                             ],
                           ),
