@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'screens/low_stock_screen.dart';
 import 'screens/product_list_screen.dart';
 import 'services/inventory_repository.dart';
 
@@ -59,20 +60,22 @@ class _InventoryHomeState extends State<InventoryHome> {
         Expanded(
           child: _selected == 0
               ? ProductListScreen(repository: repository)
-              : const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(height: 16),
-                      Text('Tu inventario en este dispositivo.'),
-                      SizedBox(height: 8),
-                      Text(
-                        'La base Flutter está lista. Las funciones del inventario se incorporan en sus respectivas ramas.',
+              : _selected == 1
+                  ? LowStockScreen(repository: repository)
+                  : const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(height: 16),
+                          Text('Tu inventario en este dispositivo.'),
+                          SizedBox(height: 8),
+                          Text(
+                            'La base Flutter está lista. Las funciones del inventario se incorporan en sus respectivas ramas.',
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
+                    ),
         ),
       ],
     );
