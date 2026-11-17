@@ -7,7 +7,7 @@ void main() {
     testWidgets(
       'ejecuta 20 cambios rapidos de pantalla sin excepciones ni cierres',
       (tester) async {
-        await tester.pumpWidget(const StockFacilApp());
+        await tester.pumpWidget(const StockFacilApp(requireAuth: false));
         expect(find.text('StockFácil'), findsOneWidget);
 
         final icons = [
@@ -32,7 +32,7 @@ void main() {
     testWidgets('gestiona el boton Volver para volver a la pestana inicial', (
       tester,
     ) async {
-      await tester.pumpWidget(const StockFacilApp());
+      await tester.pumpWidget(const StockFacilApp(requireAuth: false));
 
       // Ir a Historial
       await tester.tap(find.byIcon(Icons.history));
@@ -52,7 +52,7 @@ void main() {
     testWidgets(
       'soporta cargas asincronas pendientes durante el cambio de pantalla',
       (tester) async {
-        await tester.pumpWidget(const StockFacilApp());
+        await tester.pumpWidget(const StockFacilApp(requireAuth: false));
         final state = tester.state<InventoryHomeState>(find.byType(InventoryHome));
 
         // Iniciar carga asincrona simulada

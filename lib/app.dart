@@ -8,18 +8,37 @@ import 'screens/product_list_screen.dart';
 import 'services/auth_service.dart';
 import 'services/inventory_repository.dart';
 
-class StockFacilApp extends StatelessWidget {
+class StockFacilApp extends StatefulWidget {
   final InventoryRepository? repository;
   final AuthService? authService;
+  final bool requireAuth;
 
   const StockFacilApp({
     super.key,
     this.repository,
     this.authService,
+    this.requireAuth = true,
   });
 
   @override
+  State<StockFacilApp> createState() => _StockFacilAppState();
+}
+
+class _StockFacilAppState extends State<StockFacilApp> {
+  late final InventoryRepository _repository;
+  late final AuthService _authService;
+
+  @override
+  void initState() {
+    super.initState();
+    _repository = widget.repository ?? InventoryRepository();
+    _authService = widget.authService ?? AuthService();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final bool isAuthenticated = !widget.requireAuth || _authService.isLoggedIn;
+
     return MaterialApp(
       title: 'StockFácil',
       debugShowCheckedModeBanner: false,
@@ -31,10 +50,19 @@ class StockFacilApp extends StatelessWidget {
           border: OutlineInputBorder(),
         ),
       ),
-      home: InventoryHome(
-        repository: repository,
-        authService: authService,
-      ),
+      home: isAuthenticated
+          ? InventoryHome(
+              repository: _repository,
+              authService: _authService,
+              onLogout: () {
+                _authService.logout();
+                setState(() {});
+              },
+            )
+          : LoginScreen(
+              authService: _authService,
+              onLoginSuccess: () => setState(() {}),
+            ),
     );
   }
 }
@@ -42,11 +70,13 @@ class StockFacilApp extends StatelessWidget {
 class InventoryHome extends StatefulWidget {
   final InventoryRepository? repository;
   final AuthService? authService;
+  final VoidCallback? onLogout;
 
   const InventoryHome({
     super.key,
     this.repository,
     this.authService,
+    this.onLogout,
   });
 
   @override
@@ -102,7 +132,12 @@ class InventoryHomeState extends State<InventoryHome> {
     }
   }
 
-  Future<void> _openAuth() async {
+  Future<void> _handleAccountAction() async {
+    if (widget.onLogout != null && authService.isLoggedIn) {
+      widget.onLogout!();
+      return;
+    }
+
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (ctx) => LoginScreen(
@@ -173,14 +208,14 @@ class InventoryHomeState extends State<InventoryHome> {
             IconButton(
               key: const Key('open_auth_button'),
               tooltip: authService.isLoggedIn
-                  ? 'Cuenta (${authService.currentUserName})'
+                  ? 'Cerrar sesión (${authService.currentUserName})'
                   : 'Iniciar sesión / Registro',
               icon: Icon(
                 authService.isLoggedIn
-                    ? Icons.verified_user_outlined
+                    ? Icons.logout
                     : Icons.person_outline,
               ),
-              onPressed: _openAuth,
+              onPressed: _handleAccountAction,
             ),
           ],
         ),

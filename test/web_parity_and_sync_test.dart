@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:stockfacil_mobile/app.dart';
 import 'package:stockfacil_mobile/models/inventory_movement.dart';
 import 'package:stockfacil_mobile/screens/dashboard_screen.dart';
 import 'package:stockfacil_mobile/services/auth_service.dart';
@@ -142,5 +143,34 @@ void main() {
       expect(find.text('Alertas recientes de stock'), findsOneWidget);
       expect(find.text('Últimos movimientos'), findsOneWidget);
     });
+
+    testWidgets(
+      'StockFacilApp inicia en LoginScreen, entra al inventario y vuelve al cerrar sesión',
+      (tester) async {
+        await tester.pumpWidget(const StockFacilApp());
+
+        expect(find.text('Iniciar sesión - StockFácil'), findsOneWidget);
+        expect(find.text('Productos'), findsNothing);
+
+        await tester.enterText(
+          find.byKey(const Key('login_email_field')),
+          'admin@stockfacil.test',
+        );
+        await tester.enterText(
+          find.byKey(const Key('login_password_field')),
+          AuthService.webAdminPassword,
+        );
+        await tester.tap(find.byKey(const Key('login_submit_button')));
+        await tester.pumpAndSettle();
+
+        expect(find.text('StockFácil'), findsOneWidget);
+        expect(find.text('Productos'), findsNWidgets(2));
+
+        await tester.tap(find.byKey(const Key('open_auth_button')));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Iniciar sesión - StockFácil'), findsOneWidget);
+      },
+    );
   });
 }

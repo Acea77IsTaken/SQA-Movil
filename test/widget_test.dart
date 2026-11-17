@@ -6,7 +6,7 @@ void main() {
   testWidgets('muestra la marca y permite recorrer las tres secciones', (
     tester,
   ) async {
-    await tester.pumpWidget(const StockFacilApp());
+    await tester.pumpWidget(const StockFacilApp(requireAuth: false));
     expect(find.text('StockFácil'), findsOneWidget);
     for (final icon in [
       Icons.warning_amber_outlined,
