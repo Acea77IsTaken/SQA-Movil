@@ -1,3 +1,6 @@
+import 'network_exceptions.dart';
+import 'web_api_service.dart';
+
 class AuthValidationResult {
   final bool isValid;
   final String? errorMessage;
@@ -23,6 +26,10 @@ class AuthService {
   // Credenciales oficiales del seeder del sistema web Laravel
   static const String webAdminEmail = 'admin@stockfacil.test';
   static const String webAdminPassword = 'StockFacil2026!';
+
+  final WebApiService? apiService;
+
+  AuthService({this.apiService});
 
   final Map<String, ({String name, String password})> _users = {
     demoEmail: (name: 'Administrador Móvil', password: demoPassword),
@@ -84,9 +91,26 @@ class AuthService {
         throw Exception(validation.errorMessage);
       }
 
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-
       final normalized = validation.normalizedEmail!;
+
+      // Si hay servicio API configurado, autenticar contra el servidor web Laravel primero
+      if (apiService != null) {
+        try {
+          final res = await apiService!.login(
+            email: normalized,
+            password: rawPassword,
+          );
+          final user = res['user'] as Map<String, dynamic>?;
+          _currentUserEmail = (user?['email'] ?? normalized).toString();
+          _currentUserName = (user?['name'] ?? 'Administrador').toString();
+          return true;
+        } on NetworkException {
+          // Si no hay conexión al servidor web, permitir respaldo local
+        }
+      } else {
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      }
+
       final account = _users[normalized];
 
       if (account == null || account.password != rawPassword) {
@@ -129,6 +153,24 @@ class AuthService {
     }
 
     final normalized = validation.normalizedEmail!;
+
+    if (apiService != null) {
+      try {
+        final res = await apiService!.register(
+          name: cleanName,
+          email: normalized,
+          password: rawPassword,
+          passwordConfirmation: passwordConfirmation,
+        );
+        final user = res['user'] as Map<String, dynamic>?;
+        _currentUserEmail = (user?['email'] ?? normalized).toString();
+        _currentUserName = (user?['name'] ?? cleanName).toString();
+        return true;
+      } on NetworkException {
+        // Respaldo local si no hay red
+      }
+    }
+
     if (_users.containsKey(normalized)) {
       throw Exception('Este correo electrónico ya está registrado');
     }
@@ -142,5 +184,6 @@ class AuthService {
   void logout() {
     _currentUserEmail = null;
     _currentUserName = null;
+    apiService?.logout();
   }
 }

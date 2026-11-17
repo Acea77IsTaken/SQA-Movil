@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../services/inventory_repository.dart';
+import '../services/web_api_service.dart';
 import 'register_movement_screen.dart';
 import 'register_product_screen.dart';
 
 class ProductListScreen extends StatefulWidget {
   final InventoryRepository repository;
+  final WebApiService? apiService;
 
   const ProductListScreen({
     super.key,
     required this.repository,
+    this.apiService,
   });
 
   @override
@@ -40,6 +43,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
         builder: (_) => RegisterProductScreen(
           repository: widget.repository,
           existingProduct: existingProduct,
+          apiService: widget.apiService,
         ),
       ),
     );
@@ -54,6 +58,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
         builder: (_) => RegisterMovementScreen(
           repository: widget.repository,
           initialProductId: product?.id,
+          apiService: widget.apiService,
         ),
       ),
     );
@@ -62,9 +67,21 @@ class _ProductListScreenState extends State<ProductListScreen> {
     }
   }
 
-  void _deactivateProduct(Product product) {
-    widget.repository.deactivateProduct(product.id);
-    setState(() {});
+  Future<void> _deactivateProduct(Product product) async {
+    final api = widget.apiService;
+    if (api != null && api.isAuthenticated) {
+      try {
+        final updated = await api.deactivateProduct(product.id);
+        widget.repository.upsertProduct(updated);
+      } catch (_) {
+        widget.repository.deactivateProduct(product.id);
+      }
+    } else {
+      widget.repository.deactivateProduct(product.id);
+    }
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Color _getStatusColor(StockStatus status) {

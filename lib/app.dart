@@ -7,16 +7,19 @@ import 'screens/movement_history_screen.dart';
 import 'screens/product_list_screen.dart';
 import 'services/auth_service.dart';
 import 'services/inventory_repository.dart';
+import 'services/web_api_service.dart';
 
 class StockFacilApp extends StatefulWidget {
   final InventoryRepository? repository;
   final AuthService? authService;
+  final WebApiService? apiService;
   final bool requireAuth;
 
   const StockFacilApp({
     super.key,
     this.repository,
     this.authService,
+    this.apiService,
     this.requireAuth = true,
   });
 
@@ -26,13 +29,28 @@ class StockFacilApp extends StatefulWidget {
 
 class _StockFacilAppState extends State<StockFacilApp> {
   late final InventoryRepository _repository;
+  late final WebApiService _apiService;
   late final AuthService _authService;
 
   @override
   void initState() {
     super.initState();
     _repository = widget.repository ?? InventoryRepository();
-    _authService = widget.authService ?? AuthService();
+    _apiService = widget.apiService ?? WebApiService();
+    _authService = widget.authService ?? AuthService(apiService: _apiService);
+  }
+
+  Future<void> _syncOnLogin() async {
+    if (_apiService.isAuthenticated) {
+      try {
+        await _apiService.syncWithRepository(_repository);
+      } catch (_) {
+        // Conserva datos locales si la sincronización inicial falla
+      }
+    }
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -54,6 +72,7 @@ class _StockFacilAppState extends State<StockFacilApp> {
           ? InventoryHome(
               repository: _repository,
               authService: _authService,
+              apiService: _apiService,
               onLogout: () {
                 _authService.logout();
                 setState(() {});
@@ -61,7 +80,7 @@ class _StockFacilAppState extends State<StockFacilApp> {
             )
           : LoginScreen(
               authService: _authService,
-              onLoginSuccess: () => setState(() {}),
+              onLoginSuccess: _syncOnLogin,
             ),
     );
   }
@@ -70,12 +89,14 @@ class _StockFacilAppState extends State<StockFacilApp> {
 class InventoryHome extends StatefulWidget {
   final InventoryRepository? repository;
   final AuthService? authService;
+  final WebApiService? apiService;
   final VoidCallback? onLogout;
 
   const InventoryHome({
     super.key,
     this.repository,
     this.authService,
+    this.apiService,
     this.onLogout,
   });
 
@@ -86,6 +107,7 @@ class InventoryHome extends StatefulWidget {
 class InventoryHomeState extends State<InventoryHome> {
   late final InventoryRepository repository;
   late final AuthService authService;
+  late final WebApiService apiService;
   int _selected = 0;
   bool _isLoading = false;
   Timer? _pendingLoadTimer;
@@ -95,7 +117,8 @@ class InventoryHomeState extends State<InventoryHome> {
   void initState() {
     super.initState();
     repository = widget.repository ?? InventoryRepository();
-    authService = widget.authService ?? AuthService();
+    apiService = widget.apiService ?? WebApiService();
+    authService = widget.authService ?? AuthService(apiService: apiService);
   }
 
   @override
@@ -121,10 +144,27 @@ class InventoryHomeState extends State<InventoryHome> {
     });
   }
 
+  Future<void> _syncNow() async {
+    if (_isLoading || !apiService.isAuthenticated) return;
+    setState(() => _isLoading = true);
+    try {
+      await apiService.syncWithRepository(repository);
+    } catch (_) {
+      // Mantiene vista actual si falla la red
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   Future<void> _openDashboard() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => DashboardScreen(repository: repository),
+        builder: (_) => DashboardScreen(
+          repository: repository,
+          apiService: apiService,
+        ),
       ),
     );
     if (mounted) {
@@ -164,9 +204,15 @@ class InventoryHomeState extends State<InventoryHome> {
         ),
         Expanded(
           child: _selected == 0
-              ? ProductListScreen(repository: repository)
+              ? ProductListScreen(
+                  repository: repository,
+                  apiService: apiService,
+                )
               : _selected == 1
-                  ? LowStockScreen(repository: repository)
+                  ? LowStockScreen(
+                      repository: repository,
+                      apiService: apiService,
+                    )
                   : MovementHistoryScreen(repository: repository),
         ),
       ],
@@ -192,12 +238,19 @@ class InventoryHomeState extends State<InventoryHome> {
           actions: [
             if (_isLoading)
               const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16.0),
+                padding: EdgeInsets.symmetric(horizontal: 12.0),
                 child: SizedBox(
                   width: 20,
                   height: 20,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
+              )
+            else if (apiService.isAuthenticated)
+              IconButton(
+                key: const Key('sync_now_button'),
+                tooltip: 'Actualizar desde servidor Web',
+                icon: const Icon(Icons.sync),
+                onPressed: _syncNow,
               ),
             IconButton(
               key: const Key('open_dashboard_button'),

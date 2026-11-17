@@ -416,6 +416,39 @@ class InventoryRepository {
     return movement;
   }
 
+  static Product productFromJson(Map<String, dynamic> json) {
+    return Product(
+      id: json['id'].toString(),
+      name: (json['name'] ?? '').toString(),
+      sku: (json['sku'] ?? '').toString(),
+      category: (json['category'] ?? 'Abarrotes').toString(),
+      price: (json['price'] as num?)?.toDouble() ?? 0.0,
+      stock: (json['stock'] as num?)?.toInt() ?? 0,
+      minStock: (json['minimum_stock'] as num?)?.toInt() ?? 0,
+      description: json['description']?.toString(),
+      isActive: json['is_active'] == true,
+    );
+  }
+
+  static InventoryMovement movementFromJson(Map<String, dynamic> json) {
+    final typeStr = (json['type'] ?? 'entrada').toString();
+    final parsedDate =
+        DateTime.tryParse((json['created_at'] ?? '').toString()) ??
+        DateTime.now();
+    return InventoryMovement(
+      id: json['id'].toString(),
+      productId: json['product_id'].toString(),
+      productName: (json['product_name'] ?? 'Producto').toString(),
+      type: typeStr == 'salida' ? MovementType.salida : MovementType.entrada,
+      quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+      previousStock: (json['previous_stock'] as num?)?.toInt() ?? 0,
+      newStock: (json['resulting_stock'] as num?)?.toInt() ?? 0,
+      responsible: (json['responsible'] ?? 'Administrador').toString(),
+      date: parsedDate,
+      observation: json['note']?.toString(),
+    );
+  }
+
   /// Aplica los datos recibidos desde el endpoint /api/sync del servidor web Laravel
   void applyRemoteSyncData(Map<String, dynamic> payload) {
     final rawProducts = payload['products'];
@@ -423,19 +456,7 @@ class InventoryRepository {
       _products
         ..clear()
         ..addAll(
-          rawProducts.whereType<Map<String, dynamic>>().map((json) {
-            return Product(
-              id: json['id'].toString(),
-              name: (json['name'] ?? '').toString(),
-              sku: (json['sku'] ?? '').toString(),
-              category: (json['category'] ?? 'Abarrotes').toString(),
-              price: (json['price'] as num?)?.toDouble() ?? 0.0,
-              stock: (json['stock'] as num?)?.toInt() ?? 0,
-              minStock: (json['minimum_stock'] as num?)?.toInt() ?? 0,
-              description: json['description']?.toString(),
-              isActive: json['is_active'] == true,
-            );
-          }),
+          rawProducts.whereType<Map<String, dynamic>>().map(productFromJson),
         );
     }
 
@@ -444,28 +465,22 @@ class InventoryRepository {
       _movements
         ..clear()
         ..addAll(
-          rawMovements.whereType<Map<String, dynamic>>().map((json) {
-            final typeStr = (json['type'] ?? 'entrada').toString();
-            final parsedDate =
-                DateTime.tryParse((json['created_at'] ?? '').toString()) ??
-                DateTime.now();
-            return InventoryMovement(
-              id: json['id'].toString(),
-              productId: json['product_id'].toString(),
-              productName: (json['product_name'] ?? 'Producto').toString(),
-              type: typeStr == 'salida'
-                  ? MovementType.salida
-                  : MovementType.entrada,
-              quantity: (json['quantity'] as num?)?.toInt() ?? 0,
-              previousStock: (json['previous_stock'] as num?)?.toInt() ?? 0,
-              newStock: (json['resulting_stock'] as num?)?.toInt() ?? 0,
-              responsible: (json['responsible'] ?? 'Administrador').toString(),
-              date: parsedDate,
-              observation: json['note']?.toString(),
-            );
-          }),
+          rawMovements.whereType<Map<String, dynamic>>().map(movementFromJson),
         );
     }
+  }
+
+  void upsertProduct(Product product) {
+    final index = _products.indexWhere((p) => p.id == product.id);
+    if (index != -1) {
+      _products[index] = product;
+    } else {
+      _products.add(product);
+    }
+  }
+
+  void recordSyncedMovement(InventoryMovement movement) {
+    _movements.insert(0, movement);
   }
 
   void addProduct(Product product) {

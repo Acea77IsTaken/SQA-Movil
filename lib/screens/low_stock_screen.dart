@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../services/inventory_repository.dart';
+import '../services/web_api_service.dart';
 import 'register_movement_screen.dart';
 
 class LowStockScreen extends StatefulWidget {
   final InventoryRepository repository;
+  final WebApiService? apiService;
 
   const LowStockScreen({
     super.key,
     required this.repository,
+    this.apiService,
   });
 
   @override
@@ -22,6 +25,7 @@ class _LowStockScreenState extends State<LowStockScreen> {
         builder: (_) => RegisterMovementScreen(
           repository: widget.repository,
           initialProductId: product.id,
+          apiService: widget.apiService,
         ),
       ),
     );

@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../services/inventory_repository.dart';
+import '../services/web_api_service.dart';
 
 class RegisterProductScreen extends StatefulWidget {
   final InventoryRepository repository;
   final Product? existingProduct;
+  final WebApiService? apiService;
 
   const RegisterProductScreen({
     super.key,
     required this.repository,
     this.existingProduct,
+    this.apiService,
   });
 
   @override
@@ -115,7 +118,32 @@ class _RegisterProductScreenState extends State<RegisterProductScreen> {
 
     try {
       final Product product;
-      if (_isEditMode) {
+      final api = widget.apiService;
+      if (api != null && api.isAuthenticated) {
+        if (_isEditMode) {
+          product = await api.updateProduct(
+            id: widget.existingProduct!.id,
+            name: name,
+            sku: rawSku.trim().toUpperCase(),
+            category: _selectedCategory,
+            price: price,
+            minStock: minStock,
+            description: _descriptionController.text,
+          );
+          widget.repository.upsertProduct(product);
+        } else {
+          product = await api.createProduct(
+            name: name,
+            sku: rawSku.trim().toUpperCase(),
+            category: _selectedCategory,
+            price: price,
+            initialStock: initialStock,
+            minStock: minStock,
+            description: _descriptionController.text,
+          );
+          await api.syncWithRepository(widget.repository);
+        }
+      } else if (_isEditMode) {
         product = widget.repository.editProduct(
           id: widget.existingProduct!.id,
           name: name,

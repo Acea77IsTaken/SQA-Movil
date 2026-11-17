@@ -2,15 +2,18 @@ import 'package:flutter/material.dart';
 import '../models/inventory_movement.dart';
 import '../models/product.dart';
 import '../services/inventory_repository.dart';
+import '../services/web_api_service.dart';
 
 class RegisterMovementScreen extends StatefulWidget {
   final InventoryRepository repository;
   final String? initialProductId;
+  final WebApiService? apiService;
 
   const RegisterMovementScreen({
     super.key,
     required this.repository,
     this.initialProductId,
+    this.apiService,
   });
 
   @override
@@ -63,12 +66,26 @@ class _RegisterMovementScreenState extends State<RegisterMovementScreen> {
     });
 
     try {
-      final movement = widget.repository.registerMovement(
-        productId: _selectedProduct!.id,
-        type: _type,
-        quantity: qty,
-        observation: _observationController.text,
-      );
+      final InventoryMovement movement;
+      final api = widget.apiService;
+      if (api != null && api.isAuthenticated) {
+        final result = await api.createMovement(
+          productId: _selectedProduct!.id,
+          type: _type,
+          quantity: qty,
+          observation: _observationController.text,
+        );
+        widget.repository.upsertProduct(result.product);
+        widget.repository.recordSyncedMovement(result.movement);
+        movement = result.movement;
+      } else {
+        movement = widget.repository.registerMovement(
+          productId: _selectedProduct!.id,
+          type: _type,
+          quantity: qty,
+          observation: _observationController.text,
+        );
+      }
 
       if (!mounted) return;
       Navigator.of(context).pop<InventoryMovement>(movement);

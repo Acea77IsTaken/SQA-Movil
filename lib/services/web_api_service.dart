@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import '../models/inventory_movement.dart';
+import '../models/product.dart';
 import 'inventory_repository.dart';
 import 'network_exceptions.dart';
 
@@ -12,6 +14,8 @@ class WebApiService {
     this.baseUrl = 'http://10.0.2.2:8000/api',
     this.authToken,
   });
+
+  bool get isAuthenticated => authToken != null && authToken!.isNotEmpty;
 
   Future<Map<String, dynamic>> login({
     required String email,
@@ -52,6 +56,96 @@ class WebApiService {
     final data = await _request('GET', '/sync');
     repository.applyRemoteSyncData(data);
     return data;
+  }
+
+  Future<Product> createProduct({
+    required String name,
+    required String sku,
+    required String category,
+    required double price,
+    required int initialStock,
+    required int minStock,
+    String? description,
+  }) async {
+    final res = await _request(
+      'POST',
+      '/products',
+      body: {
+        'name': name,
+        'sku': sku,
+        'category': category,
+        'price': price,
+        'initial_stock': initialStock,
+        'minimum_stock': minStock,
+        'description': description,
+      },
+    );
+    return InventoryRepository.productFromJson(
+      res['product'] as Map<String, dynamic>,
+    );
+  }
+
+  Future<Product> updateProduct({
+    required String id,
+    required String name,
+    required String sku,
+    required String category,
+    required double price,
+    required int minStock,
+    String? description,
+  }) async {
+    final res = await _request(
+      'PUT',
+      '/products/$id',
+      body: {
+        'name': name,
+        'sku': sku,
+        'category': category,
+        'price': price,
+        'minimum_stock': minStock,
+        'description': description,
+      },
+    );
+    return InventoryRepository.productFromJson(
+      res['product'] as Map<String, dynamic>,
+    );
+  }
+
+  Future<Product> deactivateProduct(String id) async {
+    final res = await _request('PATCH', '/products/$id/deactivate');
+    return InventoryRepository.productFromJson(
+      res['product'] as Map<String, dynamic>,
+    );
+  }
+
+  Future<({InventoryMovement movement, Product product})> createMovement({
+    required String productId,
+    required MovementType type,
+    required int quantity,
+    String? observation,
+  }) async {
+    final res = await _request(
+      'POST',
+      '/movements',
+      body: {
+        'product_id': int.tryParse(productId) ?? productId,
+        'type': type == MovementType.salida ? 'salida' : 'entrada',
+        'quantity': quantity,
+        'note': observation,
+      },
+    );
+    return (
+      movement: InventoryRepository.movementFromJson(
+        res['movement'] as Map<String, dynamic>,
+      ),
+      product: InventoryRepository.productFromJson(
+        res['product'] as Map<String, dynamic>,
+      ),
+    );
+  }
+
+  void logout() {
+    authToken = null;
   }
 
   Future<Map<String, dynamic>> _request(
@@ -101,6 +195,9 @@ class WebApiService {
           : <String, dynamic>{};
 
       if (res.statusCode >= 400) {
+        if (raw.isEmpty) {
+          throw NetworkException.serverError(res.statusCode);
+        }
         final msg =
             decoded['message']?.toString() ??
             'Error en la solicitud (${res.statusCode})';
