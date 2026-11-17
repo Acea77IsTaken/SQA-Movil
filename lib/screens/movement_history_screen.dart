@@ -68,6 +68,7 @@ class _MovementHistoryScreenState extends State<MovementHistoryScreen> {
                     child: DropdownButtonFormField<String?>(
                       key: const Key('history_filter_product'),
                       initialValue: _selectedProductId,
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Producto',
                         contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -75,7 +76,10 @@ class _MovementHistoryScreenState extends State<MovementHistoryScreen> {
                       items: [
                         const DropdownMenuItem<String?>(
                           value: null,
-                          child: Text('Todos los productos'),
+                          child: Text(
+                            'Todos los productos',
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                         ...allProducts.map((p) {
                           return DropdownMenuItem<String?>(
@@ -99,6 +103,7 @@ class _MovementHistoryScreenState extends State<MovementHistoryScreen> {
                     child: DropdownButtonFormField<MovementType?>(
                       key: const Key('history_filter_type'),
                       initialValue: _selectedType,
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Tipo de movimiento',
                         contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -106,7 +111,10 @@ class _MovementHistoryScreenState extends State<MovementHistoryScreen> {
                       items: const [
                         DropdownMenuItem<MovementType?>(
                           value: null,
-                          child: Text('Todos los tipos'),
+                          child: Text(
+                            'Todos los tipos',
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                         DropdownMenuItem<MovementType?>(
                           value: MovementType.entrada,
