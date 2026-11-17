@@ -4,10 +4,12 @@ import '../services/inventory_repository.dart';
 
 class RegisterProductScreen extends StatefulWidget {
   final InventoryRepository repository;
+  final Product? existingProduct;
 
   const RegisterProductScreen({
     super.key,
     required this.repository,
+    this.existingProduct,
   });
 
   @override
@@ -23,9 +25,30 @@ class _RegisterProductScreenState extends State<RegisterProductScreen> {
   final TextEditingController _minStockController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
 
-  String _selectedCategory = InventoryRepository.availableCategories.first;
+  late String _selectedCategory;
   bool _isSubmitting = false;
   String? _errorMessage;
+
+  bool get _isEditMode => widget.existingProduct != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final existing = widget.existingProduct;
+    if (existing != null) {
+      _nameController.text = existing.name;
+      _skuController.text = existing.sku;
+      _priceController.text = existing.price.toStringAsFixed(2);
+      _minStockController.text = existing.minStock.toString();
+      _descriptionController.text = existing.description ?? '';
+      _selectedCategory =
+          InventoryRepository.availableCategories.contains(existing.category)
+          ? existing.category
+          : InventoryRepository.availableCategories.first;
+    } else {
+      _selectedCategory = InventoryRepository.availableCategories.first;
+    }
+  }
 
   @override
   void dispose() {
@@ -47,7 +70,9 @@ class _RegisterProductScreenState extends State<RegisterProductScreen> {
 
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      setState(() => _errorMessage = 'El nombre del producto no puede estar vacío');
+      setState(
+        () => _errorMessage = 'El nombre del producto no puede estar vacío',
+      );
       return;
     }
 
@@ -63,15 +88,24 @@ class _RegisterProductScreenState extends State<RegisterProductScreen> {
       return;
     }
 
-    final initialStock = int.tryParse(_initialStockController.text.trim());
-    if (initialStock == null || initialStock < 0) {
-      setState(() => _errorMessage = 'El stock inicial debe ser un entero no negativo');
-      return;
+    int initialStock = 0;
+    if (!_isEditMode) {
+      final parsedInitial = int.tryParse(_initialStockController.text.trim());
+      if (parsedInitial == null || parsedInitial < 0) {
+        setState(
+          () => _errorMessage =
+              'El stock inicial debe ser un entero no negativo',
+        );
+        return;
+      }
+      initialStock = parsedInitial;
     }
 
     final minStock = int.tryParse(_minStockController.text.trim());
     if (minStock == null || minStock < 0) {
-      setState(() => _errorMessage = 'El stock mínimo debe ser un entero no negativo');
+      setState(
+        () => _errorMessage = 'El stock mínimo debe ser un entero no negativo',
+      );
       return;
     }
 
@@ -80,15 +114,28 @@ class _RegisterProductScreenState extends State<RegisterProductScreen> {
     });
 
     try {
-      final product = widget.repository.registerProduct(
-        name: name,
-        rawSku: rawSku,
-        category: _selectedCategory,
-        price: price,
-        initialStock: initialStock,
-        minStock: minStock,
-        description: _descriptionController.text,
-      );
+      final Product product;
+      if (_isEditMode) {
+        product = widget.repository.editProduct(
+          id: widget.existingProduct!.id,
+          name: name,
+          rawSku: rawSku,
+          category: _selectedCategory,
+          price: price,
+          minStock: minStock,
+          description: _descriptionController.text,
+        );
+      } else {
+        product = widget.repository.registerProduct(
+          name: name,
+          rawSku: rawSku,
+          category: _selectedCategory,
+          price: price,
+          initialStock: initialStock,
+          minStock: minStock,
+          description: _descriptionController.text,
+        );
+      }
 
       if (!mounted) return;
       Navigator.of(context).pop<Product>(product);
@@ -110,7 +157,7 @@ class _RegisterProductScreenState extends State<RegisterProductScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Registrar producto'),
+        title: Text(_isEditMode ? 'Editar producto' : 'Registrar producto'),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -167,9 +214,7 @@ class _RegisterProductScreenState extends State<RegisterProductScreen> {
                 DropdownButtonFormField<String>(
                   key: const Key('product_category_field'),
                   initialValue: _selectedCategory,
-                  decoration: const InputDecoration(
-                    labelText: 'Categoría *',
-                  ),
+                  decoration: const InputDecoration(labelText: 'Categoría *'),
                   items: InventoryRepository.availableCategories.map((cat) {
                     return DropdownMenuItem(value: cat, child: Text(cat));
                   }).toList(),
@@ -185,7 +230,9 @@ class _RegisterProductScreenState extends State<RegisterProductScreen> {
                 TextField(
                   key: const Key('product_price_field'),
                   controller: _priceController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   decoration: const InputDecoration(
                     labelText: 'Precio (Bs.) *',
                     hintText: 'Ej. 12.50',
@@ -196,19 +243,21 @@ class _RegisterProductScreenState extends State<RegisterProductScreen> {
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    Expanded(
-                      child: TextField(
-                        key: const Key('product_initial_stock_field'),
-                        controller: _initialStockController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Stock inicial *',
-                          hintText: 'Ej. 20',
+                    if (!_isEditMode) ...[
+                      Expanded(
+                        child: TextField(
+                          key: const Key('product_initial_stock_field'),
+                          controller: _initialStockController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Stock inicial *',
+                            hintText: 'Ej. 20',
+                          ),
+                          enabled: !_isSubmitting,
                         ),
-                        enabled: !_isSubmitting,
                       ),
-                    ),
-                    const SizedBox(width: 16),
+                      const SizedBox(width: 16),
+                    ],
                     Expanded(
                       child: TextField(
                         key: const Key('product_min_stock_field'),
@@ -246,7 +295,11 @@ class _RegisterProductScreenState extends State<RegisterProductScreen> {
                           width: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Guardar producto'),
+                      : Text(
+                          _isEditMode
+                              ? 'Actualizar producto'
+                              : 'Guardar producto',
+                        ),
                 ),
               ],
             ),

@@ -17,9 +17,24 @@ class AuthValidationResult {
 }
 
 class AuthService {
-  // Demo local user credentials
   static const String demoEmail = 'admin@stockfacil.bo';
   static const String demoPassword = 'Password123!';
+
+  // Credenciales oficiales del seeder del sistema web Laravel
+  static const String webAdminEmail = 'admin@stockfacil.test';
+  static const String webAdminPassword = 'StockFacil2026!';
+
+  final Map<String, ({String name, String password})> _users = {
+    demoEmail: (name: 'Administrador Móvil', password: demoPassword),
+    webAdminEmail: (name: 'Administrador', password: webAdminPassword),
+  };
+
+  String? _currentUserEmail;
+  String? _currentUserName;
+
+  String? get currentUserEmail => _currentUserEmail;
+  String get currentUserName => _currentUserName ?? 'Administrador';
+  bool get isLoggedIn => _currentUserEmail != null;
 
   static final RegExp _emailRegExp = RegExp(
     r'^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+$',
@@ -69,20 +84,63 @@ class AuthService {
         throw Exception(validation.errorMessage);
       }
 
-      // Simulate async network/disk check
       await Future<void>.delayed(const Duration(milliseconds: 300));
 
-      // Password comparison preserves exact characters
-      final emailMatches = validation.normalizedEmail == demoEmail.toLowerCase();
-      final passwordMatches = rawPassword == demoPassword;
+      final normalized = validation.normalizedEmail!;
+      final account = _users[normalized];
 
-      if (!emailMatches || !passwordMatches) {
+      if (account == null || account.password != rawPassword) {
         throw Exception('Correo o contraseña incorrectos');
       }
 
+      _currentUserEmail = normalized;
+      _currentUserName = account.name;
       return true;
     } finally {
       _isAuthenticating = false;
     }
+  }
+
+  Future<bool> register({
+    required String name,
+    required String rawEmail,
+    required String rawPassword,
+    required String passwordConfirmation,
+  }) async {
+    final cleanName = name.trim();
+    if (cleanName.isEmpty) {
+      throw Exception('Ingresa tu nombre completo');
+    }
+
+    final validation = validateCredentials(
+      rawEmail: rawEmail,
+      rawPassword: rawPassword,
+    );
+    if (!validation.isValid) {
+      throw Exception(validation.errorMessage);
+    }
+
+    if (rawPassword.length < 8) {
+      throw Exception('La contraseña debe tener al menos 8 caracteres');
+    }
+
+    if (rawPassword != passwordConfirmation) {
+      throw Exception('La confirmación de la contraseña no coincide');
+    }
+
+    final normalized = validation.normalizedEmail!;
+    if (_users.containsKey(normalized)) {
+      throw Exception('Este correo electrónico ya está registrado');
+    }
+
+    _users[normalized] = (name: cleanName, password: rawPassword);
+    _currentUserEmail = normalized;
+    _currentUserName = cleanName;
+    return true;
+  }
+
+  void logout() {
+    _currentUserEmail = null;
+    _currentUserName = null;
   }
 }

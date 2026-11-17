@@ -19,6 +19,7 @@ class ProductListScreen extends StatefulWidget {
 class _ProductListScreenState extends State<ProductListScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  String _statusFilter = 'active';
 
   @override
   void dispose() {
@@ -33,10 +34,13 @@ class _ProductListScreenState extends State<ProductListScreen> {
     });
   }
 
-  Future<void> _navigateToRegister() async {
+  Future<void> _navigateToRegister([Product? existingProduct]) async {
     final result = await Navigator.of(context).push<Product>(
       MaterialPageRoute(
-        builder: (_) => RegisterProductScreen(repository: widget.repository),
+        builder: (_) => RegisterProductScreen(
+          repository: widget.repository,
+          existingProduct: existingProduct,
+        ),
       ),
     );
     if (result != null) {
@@ -56,6 +60,11 @@ class _ProductListScreenState extends State<ProductListScreen> {
     if (result != null) {
       setState(() {});
     }
+  }
+
+  void _deactivateProduct(Product product) {
+    widget.repository.deactivateProduct(product.id);
+    setState(() {});
   }
 
   Color _getStatusColor(StockStatus status) {
@@ -82,13 +91,16 @@ class _ProductListScreenState extends State<ProductListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final allProducts = widget.repository.getAllActiveProducts();
-    final filteredProducts = widget.repository.searchProducts(_searchQuery);
+    final allProducts = widget.repository.getAllProducts();
+    final filteredProducts = widget.repository.filterProducts(
+      query: _searchQuery,
+      status: _statusFilter,
+    );
 
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
           child: Row(
             children: [
               Expanded(
@@ -115,11 +127,31 @@ class _ProductListScreenState extends State<ProductListScreen> {
                 ),
               ),
               const SizedBox(width: 8),
+              PopupMenuButton<String>(
+                key: const Key('product_status_filter_menu'),
+                tooltip: 'Filtrar por estado',
+                initialValue: _statusFilter,
+                icon: const Icon(Icons.filter_list),
+                onSelected: (val) {
+                  setState(() {
+                    _statusFilter = val;
+                  });
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'active', child: Text('Solo activos')),
+                  PopupMenuItem(
+                    value: 'inactive',
+                    child: Text('Solo inactivos'),
+                  ),
+                  PopupMenuItem(value: 'all', child: Text('Todos')),
+                ],
+              ),
+              const SizedBox(width: 4),
               IconButton.filled(
                 key: const Key('open_register_product_button'),
                 icon: const Icon(Icons.add),
                 tooltip: 'Registrar producto',
-                onPressed: _navigateToRegister,
+                onPressed: () => _navigateToRegister(),
               ),
             ],
           ),
@@ -134,7 +166,11 @@ class _ProductListScreenState extends State<ProductListScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey),
+                        Icon(
+                          Icons.inventory_2_outlined,
+                          size: 64,
+                          color: Colors.grey,
+                        ),
                         SizedBox(height: 16),
                         Text(
                           'El catálogo de productos está vacío',
@@ -154,7 +190,11 @@ class _ProductListScreenState extends State<ProductListScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.search_off, size: 64, color: Colors.grey),
+                        const Icon(
+                          Icons.search_off,
+                          size: 64,
+                          color: Colors.grey,
+                        ),
                         const SizedBox(height: 16),
                         const Text(
                           'No se encontraron productos para la búsqueda',
@@ -177,7 +217,8 @@ class _ProductListScreenState extends State<ProductListScreen> {
                 key: const Key('product_list_view'),
                 padding: const EdgeInsets.all(16),
                 itemCount: filteredProducts.length,
-                separatorBuilder: (context, index) => const SizedBox(height: 12),
+                separatorBuilder: (context, index) =>
+                    const SizedBox(height: 12),
                 itemBuilder: (context, index) {
                   final product = filteredProducts[index];
                   final status = product.status;
@@ -207,6 +248,25 @@ class _ProductListScreenState extends State<ProductListScreen> {
                                   ),
                                 ),
                               ),
+                              if (!product.isActive)
+                                Container(
+                                  margin: const EdgeInsets.only(right: 6),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade200,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Text(
+                                    'Inactivo',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 8,
@@ -270,18 +330,50 @@ class _ProductListScreenState extends State<ProductListScreen> {
                                   color: Color(0xff234e43),
                                 ),
                               ),
-                              Text(
-                                'Stock: ${product.stock} un.',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey.shade800,
-                                ),
-                              ),
-                              IconButton(
-                                key: Key('move_product_btn_${product.id}'),
-                                icon: const Icon(Icons.swap_horiz, size: 20),
-                                tooltip: 'Registrar movimiento',
-                                onPressed: () => _navigateToMovement(product),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Stock: ${product.stock} un.',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                  IconButton(
+                                    key: Key('edit_product_btn_${product.id}'),
+                                    icon: const Icon(
+                                      Icons.edit_outlined,
+                                      size: 20,
+                                    ),
+                                    tooltip: 'Editar producto',
+                                    onPressed: () =>
+                                        _navigateToRegister(product),
+                                  ),
+                                  if (product.isActive) ...[
+                                    IconButton(
+                                      key: Key(
+                                        'move_product_btn_${product.id}',
+                                      ),
+                                      icon: const Icon(
+                                        Icons.swap_horiz,
+                                        size: 20,
+                                      ),
+                                      tooltip: 'Registrar movimiento',
+                                      onPressed: () =>
+                                          _navigateToMovement(product),
+                                    ),
+                                    IconButton(
+                                      key: Key(
+                                        'deactivate_product_btn_${product.id}',
+                                      ),
+                                      icon: const Icon(Icons.block, size: 18),
+                                      tooltip: 'Desactivar producto',
+                                      onPressed: () =>
+                                          _deactivateProduct(product),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ],
                           ),
